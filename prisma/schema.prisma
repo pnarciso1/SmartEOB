@@ -1,0 +1,88 @@
+// This is your multi-tenant, event-based schema
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+// 1. TENANCY LAYER
+model Tenant {
+  id            String          @id @default(uuid())
+  name          String
+  slug          String          @unique // e.g., 'northwest-tpa'
+  primaryColor  String          @default("#0F172A")
+  logoUrl       String?
+  apiKeyHash    String          @unique
+  employers     EmployerGroup[]
+  createdAt     DateTime        @default(now())
+}
+
+model EmployerGroup {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  name         String
+  planDocUrl   String?  // GCS Bucket Link to Plan PDF
+  planRules    Json?    // Vectorized summary of Deductible/Coinsurance
+  planRulesVector Unsupported("vector(768)")? // Gemini embeddings
+  members      Member[]
+  createdAt    DateTime @default(now())
+}
+
+// 2. MEMBER & EVENT LAYER
+model Member {
+  id              String         @id @default(uuid())
+  employerGroupId String
+  employerGroup   EmployerGroup  @relation(fields: [employerGroupId], references: [id])
+  externalId      String?        // ID from the Fintech/HSA system
+  firstName       String
+  lastName        String
+  medicalEvents   MedicalEvent[]
+}
+
+model MedicalEvent {
+  id          String   @id @default(uuid())
+  tenantId    String
+  memberId    String
+  member      Member   @relation(fields: [memberId], references: [id])
+  name        String   // e.g., "Emergency Fall & Recovery"
+  status      String   @default("OPEN") // OPEN, DISPUTED, RESOLVED
+  totalSaved  Decimal  @default(0)
+  claims      Claim[]
+  createdAt   DateTime @default(now())
+}
+
+// 3. THE RECONCILIATION LAYER (The "Truth" Object)
+model Claim {
+  id               String       @id @default(uuid())
+  tenantId         String
+  eventId          String
+  medicalEvent     MedicalEvent @relation(fields: [eventId], references: [id])
+  providerName     String
+  serviceDate      DateTime
+  cptCode          String
+  
+  // Three-Way Reconciliation Data
+  providerBilled   Decimal
+  insuranceAllowed Decimal
+  planRuleAmount   Decimal      // What the Plan Doc actually says
+  memberOwes       Decimal      // Final verified amount
+  
+  status           ClaimStatus  @default(PENDING)
+  varianceNote     String?      // Agentic explanation of errors
+  rawEobData       Json?        // Stored extracted JSON from Gemini
+  contextVector    Unsupported("vector(768)")? // Embeddings of diagnoses/CPTs for clustering
+  createdAt        DateTime     @default(now())
+}
+
+enum ClaimStatus {
+  PENDING
+  VERIFIED
+  DISPUTED
+  PAID
+}

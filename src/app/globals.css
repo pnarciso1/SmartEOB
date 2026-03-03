@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Default theme (Northwest HSA Admin) */
+  --color-primary: #0F172A;
+  --color-secondary: #334155;
+  --color-accent: #3B82F6;
+  --color-background: #F8FAFC;
+  --color-text: #1E293B;
+}
+
+/* Tenant A theme */
+[data-tenant="tpa_a"] {
+  --color-primary: #1e3a8a; /* deep blue */
+  --color-secondary: #1d4ed8;
+  --color-accent: #fbbf24;
+  --color-background: #eff6ff;
+  --color-text: #172554;
+}
+
+/* Tenant B theme */
+[data-tenant="tpa_b"] {
+  --color-primary: #064e3b; /* deep green */
+  --color-secondary: #047857;
+  --color-accent: #34d399;
+  --color-background: #ecfdf5;
+  --color-text: #022c22;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+}
