@@ -1,9 +1,12 @@
 'use client';
 
 import { Suspense, useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   ShieldAlert, CheckCircle, FileText, Loader2, Info, Activity,
   X, Send, CalendarPlus, Stethoscope, UploadCloud, ScanSearch, Sparkles,
+  AlertTriangle, TrendingDown, Heart, DollarSign, Lightbulb, BarChart3,
+  Clock, ChevronRight,
 } from 'lucide-react';
 import { JourneyView, MockClaim } from '@/components/JourneyView';
 import { ReconTable, ReconRow } from '@/components/ReconTable';
@@ -26,14 +29,55 @@ interface NextAction {
   actionButtonText: string;
 }
 
+interface DisputeItem {
+  eventId: string;
+  eventName: string;
+  createdAt: string;
+  status: string;
+  claims: {
+    claimId: string;
+    providerName: string;
+    serviceDate: string;
+    cptCode: string;
+    providerBilled: number;
+    discrepancyNote: string;
+    status: string;
+  }[];
+}
+
+interface OptimizeInsight {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  potentialSavings: string | null;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  actionLabel: string;
+  actionDetail: string;
+}
+
 function MemberPortalContent({ params }: { params: { tenantId: string; memberId: string } }) {
   const tenantSlug = params.tenantId;
   const memberId = params.memberId;
+  const searchParams = useSearchParams();
+
+  const [activeTab, setActiveTab] = useState<'journey' | 'disputes' | 'spending' | 'optimize'>(
+    (searchParams.get('tab') as any) || 'journey'
+  );
 
   const [events, setEvents] = useState<MedicalEventData[]>([]);
   const [nextAction, setNextAction] = useState<NextAction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Disputes tab state
+  const [disputes, setDisputes] = useState<DisputeItem[]>([]);
+  const [disputesLoading, setDisputesLoading] = useState(false);
+
+  // Optimize tab state
+  const [insights, setInsights] = useState<OptimizeInsight[]>([]);
+  const [optimizeLoading, setOptimizeLoading] = useState(false);
+  const [optimizeMessage, setOptimizeMessage] = useState<string | null>(null);
 
   // Resolved from events API — used for uploads
   const [resolvedTenantId, setResolvedTenantId] = useState<string | null>(null);
@@ -63,6 +107,11 @@ function MemberPortalContent({ params }: { params: { tenantId: string; memberId:
     fetchData();
   }, [tenantSlug, memberId]);
 
+  useEffect(() => {
+    if (activeTab === 'disputes' && disputes.length === 0 && !disputesLoading) fetchDisputes();
+    if (activeTab === 'optimize' && insights.length === 0 && !optimizeLoading) fetchOptimize();
+  }, [activeTab]);
+
   // --- Data Fetching ---
 
   async function fetchData() {
@@ -87,6 +136,35 @@ function MemberPortalContent({ params }: { params: { tenantId: string; memberId:
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchDisputes() {
+    try {
+      setDisputesLoading(true);
+      const res = await fetch(`/api/v1/member/disputes?memberId=${memberId}`);
+      if (!res.ok) throw new Error('Failed to fetch disputes');
+      const json = await res.json();
+      setDisputes(json.data || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDisputesLoading(false);
+    }
+  }
+
+  async function fetchOptimize() {
+    try {
+      setOptimizeLoading(true);
+      const res = await fetch(`/api/v1/member/optimize?memberId=${memberId}`);
+      if (!res.ok) throw new Error('Failed to fetch insights');
+      const json = await res.json();
+      setInsights(json.data?.insights || []);
+      setOptimizeMessage(json.data?.message || null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setOptimizeLoading(false);
     }
   }
 
@@ -200,12 +278,32 @@ function MemberPortalContent({ params }: { params: { tenantId: string; memberId:
 
       <main className="container mx-auto p-6 max-w-5xl mt-6">
 
-        {/* Page Title */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-semibold mb-2 text-gray-800">Your Medical Journey</h2>
-          <p className="text-secondary">
-            We automatically review your provider bills against your plan rules to protect you from overcharges.
-          </p>
+        {/* Tab Navigation */}
+        <div className="flex gap-1 mb-8 border-b border-gray-200">
+          {([
+            { key: 'journey', label: 'My Journey', icon: Activity },
+            { key: 'disputes', label: 'Disputes', icon: AlertTriangle },
+            { key: 'spending', label: 'Spending', icon: BarChart3 },
+            { key: 'optimize', label: 'Optimize', icon: Lightbulb },
+          ] as const).map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === key
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+              {key === 'disputes' && disputes.length > 0 && (
+                <span className="ml-1 bg-red-100 text-red-600 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                  {disputes.length}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Error Banner */}
@@ -216,6 +314,238 @@ function MemberPortalContent({ params }: { params: { tenantId: string; memberId:
           </div>
         )}
 
+        {/* ── DISPUTES TAB ─────────────────────────────────────────────────── */}
+        {activeTab === 'disputes' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold text-gray-800">Your Disputes</h2>
+              <p className="text-gray-500 text-sm mt-1">Claims flagged for billing discrepancies and under active review.</p>
+            </div>
+            {disputesLoading ? (
+              <div className="flex justify-center items-center py-20">
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              </div>
+            ) : disputes.length === 0 ? (
+              <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-100">
+                <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700">No active disputes</h3>
+                <p className="text-gray-400 text-sm mt-1">Any billing discrepancies flagged from your health portal will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {disputes.map((dispute) => (
+                  <div key={dispute.eventId} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                    <div className="bg-amber-50 border-b border-amber-100 px-6 py-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-500" />
+                        <div>
+                          <h3 className="font-semibold text-gray-800">{dispute.eventName}</h3>
+                          <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Opened {new Date(dispute.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
+                        {dispute.status}
+                      </span>
+                    </div>
+                    <div className="p-6 space-y-3">
+                      {dispute.claims.map((claim) => (
+                        <div key={claim.claimId} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-800">{claim.providerName}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">Claim ID: {claim.cptCode}</p>
+                              {claim.discrepancyNote && (
+                                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded p-2 mt-2 leading-relaxed">
+                                  {claim.discrepancyNote}
+                                </p>
+                              )}
+                            </div>
+                            {claim.providerBilled > 0 && (
+                              <div className="text-right flex-shrink-0">
+                                <p className="text-xs text-gray-400">Disputed Amount</p>
+                                <p className="text-lg font-bold text-red-600">
+                                  ${claim.providerBilled.toFixed(2)}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleGenerateAppeal(claim.claimId)}
+                            className="mt-3 flex items-center gap-2 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            Generate Appeal Letter
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SPENDING TAB ──────────────────────────────────────────────────── */}
+        {activeTab === 'spending' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold text-gray-800">Your Spending</h2>
+              <p className="text-gray-500 text-sm mt-1">Financial summary of all reviewed medical claims.</p>
+            </div>
+            {loading ? (
+              <div className="flex justify-center items-center py-20">
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              </div>
+            ) : events.length === 0 ? (
+              <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-100">
+                <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700">No spending data yet</h3>
+                <p className="text-gray-400 text-sm mt-1">Upload a bill on the My Journey tab to start tracking your healthcare spending.</p>
+              </div>
+            ) : (
+              <>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                  <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Total Billed</p>
+                    <p className="text-2xl font-bold text-gray-800">
+                      {formatCurrency(events.reduce((s, e) => s + e.reconRows.reduce((rs, r) => rs + r.providerBilled, 0), 0))}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">Across {events.length} medical event{events.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">Insurance Paid</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {formatCurrency(events.reduce((s, e) => s + e.reconRows.reduce((rs, r) => rs + r.insuranceAllowed, 0), 0))}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">Allowed by your plan</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5 shadow-sm">
+                    <p className="text-xs text-green-600 uppercase tracking-wider font-semibold mb-1">Your Verified Balance</p>
+                    <p className="text-2xl font-bold text-green-700">{formatCurrency(totalMemberOwes)}</p>
+                    <p className="text-xs text-green-600 mt-1">After SmartEOB audit</p>
+                  </div>
+                </div>
+                {/* Claims Breakdown */}
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                    <h3 className="font-semibold text-gray-800">Claims Breakdown</h3>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {events.flatMap((event) =>
+                      event.reconRows.map((row, i) => (
+                        <div key={`${event.id}-${i}`} className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-gray-50/50 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">{row.service}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{event.name}</p>
+                          </div>
+                          <div className="flex items-center gap-6 text-right text-sm flex-shrink-0">
+                            <div>
+                              <p className="text-xs text-gray-400">Billed</p>
+                              <p className="font-medium text-gray-700">{formatCurrency(row.providerBilled)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-400">You Owe</p>
+                              <p className={`font-bold ${row.memberOwes === 0 ? 'text-green-600' : 'text-gray-800'}`}>
+                                {formatCurrency(row.memberOwes)}
+                              </p>
+                            </div>
+                            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                              row.status === 'DISPUTED' ? 'bg-amber-100 text-amber-700' :
+                              row.status === 'VERIFIED' ? 'bg-green-100 text-green-700' :
+                              'bg-gray-100 text-gray-500'
+                            }`}>{row.status}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── OPTIMIZE TAB ──────────────────────────────────────────────────── */}
+        {activeTab === 'optimize' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold text-gray-800">Health & Cost Optimization</h2>
+              <p className="text-gray-500 text-sm mt-1">AI-powered insights to help you get more from your health plan.</p>
+            </div>
+            {optimizeLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
+                <p className="text-gray-500">Analyzing your health record for opportunities...</p>
+              </div>
+            ) : optimizeMessage && insights.length === 0 ? (
+              <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-100">
+                <Heart className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 max-w-sm mx-auto">{optimizeMessage}</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {insights.map((insight) => {
+                  const categoryColors: Record<string, string> = {
+                    COST_SAVINGS: 'bg-green-50 border-green-200 text-green-700',
+                    CARE_GAP: 'bg-amber-50 border-amber-200 text-amber-700',
+                    BENEFIT_UNUSED: 'bg-blue-50 border-blue-200 text-blue-700',
+                    MEDICATION: 'bg-purple-50 border-purple-200 text-purple-700',
+                    PREVENTIVE: 'bg-teal-50 border-teal-200 text-teal-700',
+                  };
+                  const categoryIcons: Record<string, any> = {
+                    COST_SAVINGS: TrendingDown,
+                    CARE_GAP: AlertTriangle,
+                    BENEFIT_UNUSED: Sparkles,
+                    MEDICATION: FileText,
+                    PREVENTIVE: Heart,
+                  };
+                  const Icon = categoryIcons[insight.category] || Lightbulb;
+                  const colorClass = categoryColors[insight.category] || 'bg-gray-50 border-gray-200 text-gray-700';
+                  return (
+                    <div key={insight.id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                      <div className={`px-5 py-3 border-b flex items-center justify-between ${colorClass}`}>
+                        <div className="flex items-center gap-2 text-sm font-semibold">
+                          <Icon className="w-4 h-4" />
+                          {insight.category.replace('_', ' ')}
+                        </div>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                          insight.priority === 'HIGH' ? 'bg-red-100 text-red-600' :
+                          insight.priority === 'MEDIUM' ? 'bg-amber-100 text-amber-600' :
+                          'bg-gray-100 text-gray-500'
+                        }`}>{insight.priority}</span>
+                      </div>
+                      <div className="p-5">
+                        <h3 className="font-semibold text-gray-800 mb-2">{insight.title}</h3>
+                        <p className="text-sm text-gray-600 leading-relaxed mb-4">{insight.description}</p>
+                        {insight.potentialSavings && (
+                          <p className="text-sm font-bold text-green-600 mb-3">
+                            Potential savings: {insight.potentialSavings}
+                          </p>
+                        )}
+                        <button
+                          onClick={() => alert(insight.actionDetail)}
+                          className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                        >
+                          {insight.actionLabel} <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── JOURNEY TAB ───────────────────────────────────────────────────── */}
+        {activeTab === 'journey' && (
+          <>
         {/* Upload Success Banner */}
         {uploadSuccess && (
           <div className="mb-6 bg-green-50 border border-green-200 text-green-800 p-4 rounded-lg flex items-center gap-3">
@@ -394,6 +724,8 @@ function MemberPortalContent({ params }: { params: { tenantId: string; memberId:
                 </div>
               </div>
             ))}
+          </>
+        )}
           </>
         )}
       </main>

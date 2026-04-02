@@ -60,11 +60,42 @@ async function main() {
     },
   });
 
+  // ── Howlite Healthcare (Client Portal Tenant) ──────────────────────────────
+  const howlite = await prisma.tenant.upsert({
+    where: { slug: 'howlite' },
+    update: { name: 'Howlite Healthcare' },
+    create: {
+      slug: 'howlite',
+      name: 'Howlite Healthcare',
+      apiKeyHash: 'hsk_live_howlite_2026_smarteob',
+      primaryColor: '#0e7490',
+    },
+  });
+
+  const existingHowliteEmployer = await prisma.employerGroup.findFirst({
+    where: { tenantId: howlite.id },
+  });
+
+  const howliteEmployer = existingHowliteEmployer
+    ? existingHowliteEmployer
+    : await prisma.employerGroup.create({
+        data: {
+          tenantId: howlite.id,
+          name: 'Howlite Healthcare Members',
+          planRules: {
+            notes: 'Medicare + Aetna coordination of benefits. Members tracked via CMS Blue Button FHIR data.',
+          },
+        },
+      });
+
   console.log('Seeding finished.');
   console.log('-------------------');
-  console.log('Tenant ID:', tenant.id);
-  console.log('Employer ID:', employer.id);
-  console.log('Member ID:', member.id);
+  console.log('Tenant ID (tpa_a):', tenant.id);
+  console.log('Employer ID (Unity Global Care):', employer.id);
+  console.log('Member ID (Dave Duplay):', member.id);
+  console.log('-------------------');
+  console.log('Tenant ID (Howlite Healthcare):', howlite.id);
+  console.log('Employer ID (Howlite Members):', howliteEmployer.id);
 }
 
 main()
