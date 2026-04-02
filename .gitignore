@@ -50,3 +50,5 @@ build/Release
 bower_components
 .npm
 .dataconnect
+
+.env*.local
