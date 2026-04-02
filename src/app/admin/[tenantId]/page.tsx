@@ -7,6 +7,7 @@ import {
   PlusCircle, Sparkles, BadgeCheck,
 } from 'lucide-react';
 import Link from 'next/link';
+import { UserButton } from '@clerk/nextjs';
 
 // --- Types ---
 
@@ -283,6 +284,7 @@ function AdminDashboardContent({ params }: { params: { tenantId: string } }) {
                 {isUploading ? 'Simulating Clearinghouse Feed...' : 'Simulate Claim Upload'}
               </button>
             </div>
+            <UserButton afterSignOutUrl="/sign-in" />
           </div>
         </div>
       </header>

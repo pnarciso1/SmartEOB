@@ -13,6 +13,7 @@
     "seed": "npx ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@clerk/nextjs": "^4.31.8",
     "@google-cloud/vertexai": "^1.10.0",
     "@prisma/client": "^5.12.0",
     "autoprefixer": "^10.4.24",

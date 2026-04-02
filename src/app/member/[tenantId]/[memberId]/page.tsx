@@ -9,6 +9,7 @@ import { JourneyView, MockClaim } from '@/components/JourneyView';
 import { ReconTable, ReconRow } from '@/components/ReconTable';
 import { CostNavigatorChat } from '@/components/CostNavigatorChat';
 import Link from 'next/link';
+import { UserButton } from '@clerk/nextjs';
 
 interface MedicalEventData {
   id: string;
@@ -192,6 +193,7 @@ function MemberPortalContent({ params }: { params: { tenantId: string; memberId:
             >
               Back to Command Center
             </Link>
+            <UserButton afterSignOutUrl="/sign-in" />
           </div>
         </div>
       </header>
