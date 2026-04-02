@@ -1,11 +1,13 @@
 import { authMiddleware } from '@clerk/nextjs';
 
 export default authMiddleware({
-  // Public routes — no Clerk session required
-  // API routes use their own auth (API keys or are read-only public)
+  // Public routes — Clerk middleware runs but auth is not required
   publicRoutes: [
     '/sign-in(.*)',
     '/sign-up(.*)',
+  ],
+  // Ignored routes — Clerk middleware skips entirely (for API routes with own auth)
+  ignoredRoutes: [
     '/api/(.*)',
   ],
 });
